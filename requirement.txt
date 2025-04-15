@@ -1,0 +1,8 @@
+opencv-python
+mediapipe
+fastapi
+uvicorn
+websockets
+aiortc
+gtts
+pygame
