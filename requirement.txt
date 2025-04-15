@@ -6,3 +6,5 @@ websockets
 aiortc
 gtts
 pygame
+
+pybluez
