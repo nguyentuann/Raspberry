@@ -1,0 +1,7 @@
+{
+    "python.analysis.extraPaths": [
+        "./mobile/webrtc_",
+        "./mobile/webrtc_",
+        "./pybluez"
+    ]
+}

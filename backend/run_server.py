@@ -10,18 +10,24 @@ import asyncio
 from fastapi import FastAPI, WebSocket
 from iot.camera_manager import CameraManager
 from iot.speaker import speaker_output
+
 from mobile.webrtc_handler import handleWebRTC
+from mobile.webrtc_bluetooth import handle_webrtc_via_bluetooth
 import websockets
 
 app = FastAPI()
 camera_manager = CameraManager()
-ai_server_ip = "192.168.52.233"
+ai_server_ip = "192.168.23.100"
 
 
-@app.websocket("/ws")
-async def websocket_endpoint(websocket: WebSocket):
-    await websocket.accept()
+# @app.websocket("/ws")
+# async def websocket_endpoint(websocket: WebSocket):
+#     await websocket.accept()
 
+@app.on_event("startup")
+async def start_main_tasks():
+
+    print("🚀 Server khởi động...")
     # Kết nối đến WebSocket server để gửi keypoints
     ai_socket = None
     try:
@@ -29,7 +35,6 @@ async def websocket_endpoint(websocket: WebSocket):
         print("Đã kết nối đến ai_socket")
     except Exception as e:
         print(f"⚠️ Không thể kết nối đến ai_socket: {e}")
-        await websocket.close()
         return
 
     # Khởi động camera
@@ -37,14 +42,21 @@ async def websocket_endpoint(websocket: WebSocket):
 
     # Tạo các task bất đồng bộ
     send_keypoint_task = asyncio.create_task(camera_manager._send_keypoints(ai_socket))
+
+    # dùng ws làm signaling server
     # webrtc_task = asyncio.create_task(handleWebRTC(websocket, camera_manager))
+
+    # dùng bluetooth làm signaling server
+    # webrtc_task = asyncio.create_task(handle_webrtc_via_bluetooth())
+
+    # xử lý với loa
     listen_ai_socket_task = asyncio.create_task(speaker_output(ai_socket))
 
     try:
         await asyncio.gather(
-            # webrtc_task, 
-            send_keypoint_task, 
-            listen_ai_socket_task
+            # webrtc_task,
+            send_keypoint_task,
+            listen_ai_socket_task,
         )
     except Exception as e:
         print(f"⚠️ Lỗi WebSocket: {e}")
@@ -57,21 +69,15 @@ async def websocket_endpoint(websocket: WebSocket):
         # Đợi các task thực sự dừng lại
         try:
             await asyncio.gather(
-                send_keypoint_task, 
-                # webrtc_task, 
-                return_exceptions=True
+                send_keypoint_task,
+                # webrtc_task,
+                return_exceptions=True,
             )
         except asyncio.CancelledError:
             print("error")
             pass
 
         camera_manager.stop_camera()
-
-        # Đóng các kết nối WebSocket
-        try:
-            await websocket.close()
-        except Exception as e:
-            print(f"⚠️ Lỗi khi đóng websocket: {e}")
 
         if ai_socket:
             try:

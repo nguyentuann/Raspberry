@@ -1,5 +1,11 @@
-import bluetooth
-import json
+import sys
+import os
+
+backend_dir = os.path.dirname(os.path.abspath(__file__))
+parent_dir = os.path.dirname(backend_dir)
+sys.path.append(parent_dir)
+
+import asyncio
 from aiortc import (
     RTCConfiguration,
     RTCIceCandidate,
@@ -7,24 +13,14 @@ from aiortc import (
     RTCPeerConnection,
     RTCSessionDescription,
 )
-from iot.camera_manager import CameraManager  
+from iot.camera_manager import CameraManager
+from iot.bluetooth_manager import BluetoothManager
 
-# Thiết lập Bluetooth server RFCOMM
-def setup_bluetooth():
-    server_sock = bluetooth.BluetoothSocket(bluetooth.RFCOMM)
-    server_sock.bind(("", bluetooth.PORT_ANY))
-    server_sock.listen(1)
 
-    print("👂 Đang chờ kết nối Bluetooth...")
-    client_sock, address = server_sock.accept()
-    print(f"📲 Kết nối từ {address}")
+async def handle_webrtc_via_bluetooth(camera_manager: CameraManager):
+    signaling = BluetoothManager()
+    signaling.start()
 
-    return client_sock
-
-# Xử lý WebRTC
-async def handleWebRTC(client_sock, camera_manager: CameraManager):
-
-    """Xử lý WebRTC và nhận tín hiệu qua Bluetooth"""
     configuration = RTCConfiguration(
         iceServers=[RTCIceServer(urls="stun:stun.l.google.com:19302")]
     )
@@ -34,107 +30,68 @@ async def handleWebRTC(client_sock, camera_manager: CameraManager):
     @pc.on("icecandidate")
     async def on_ice_candidate(candidate):
         if candidate:
-            print("📡 Gửi ICE Candidate đến client qua Bluetooth")
-            # Gửi ICE candidate qua Bluetooth
-            message = {
-                "type": "candidate",
-                "candidate": {
-                    "candidate": candidate.to_sdp(),
-                    "sdpMid": candidate.sdpMid,
-                    "sdpMLineIndex": candidate.sdpMLineIndex,
-                },
-            }
-            client_sock.send(json.dumps(message).encode())
+            print("📡 Gửi ICE Candidate qua Bluetooth")
+            signaling.send_json(
+                {
+                    "type": "candidate",
+                    "candidate": {
+                        "candidate": candidate.to_sdp(),
+                        "sdpMid": candidate.sdpMid,
+                        "sdpMLineIndex": candidate.sdpMLineIndex,
+                    },
+                }
+            )
 
     try:
         while True:
-            # Nhận tín hiệu từ Bluetooth
-            data = client_sock.recv(4096).decode()
-            if not data:
+            data = signaling.receive_json()
+            if data is None:
                 break
-            print(f"📩 Nhận từ mobile qua Bluetooth: {data}")
 
-            # Chuyển đổi JSON từ dữ liệu nhận được
-            data_json = json.loads(data)
-
-            if data_json["type"] == "join":
+            if data["type"] == "join":
                 offer = await pc.createOffer()
                 await pc.setLocalDescription(offer)
-                message = {
-                    "type": "offer",
-                    "offer": {
-                        "sdp": pc.localDescription.sdp,
-                        "type": pc.localDescription.type,
-                    },
-                }
-                print("✅ Đã gửi Offer qua Bluetooth")
-                client_sock.send(json.dumps(message).encode())
-
-            elif data_json["type"] == "answer":
-                print("✅ Nhận Answer từ client")
-                remoteDesc = RTCSessionDescription(
-                    sdp=data_json["answer"]["sdp"], type=data_json["answer"]["type"]
+                signaling.send_json(
+                    {
+                        "type": "offer",
+                        "offer": {
+                            "sdp": pc.localDescription.sdp,
+                            "type": pc.localDescription.type,
+                        },
+                    }
                 )
-                await pc.setRemoteDescription(remoteDesc)
+                print("✅ Gửi Offer")
 
-            elif data_json["type"] == "candidate":
-                print('nhận candidate')
-                candidate = data_json["candidate"]
+            elif data["type"] == "answer":
+                print("✅ Nhận Answer")
+                answer = data["answer"]
+                await pc.setRemoteDescription(
+                    RTCSessionDescription(sdp=answer["sdp"], type=answer["type"])
+                )
+
+            elif data["type"] == "candidate":
+                print("✅ Nhận Candidate")
+                candidate = data["candidate"]
                 parts = candidate["candidate"].split()
-
-                foundation = parts[0].split(":")[1]
-                component = int(parts[1])
-                protocol = parts[2]
-                priority = int(parts[3])
-                ip = parts[4]
-                port = int(parts[5])
-                candidate_type = parts[7]
-
-                # Kiểm tra candidate có đủ thông tin cần thiết
-                if (
-                    "sdpMid" in candidate
-                    and candidate["sdpMid"] is not None
-                    and "sdpMLineIndex" in candidate
-                    and "candidate" in candidate
-                ):
-                    # Chỉ thêm candidate nếu đã có remoteDescription
-                    if pc.remoteDescription is None:
-                        print("Chưa có remoteDescription, bỏ qua ICE Candidate")
-                    else:
-                        try:
-                            ice_candidate = RTCIceCandidate(
-                                component=component,
-                                foundation=foundation,
-                                ip=ip,
-                                port=port,
-                                priority=priority,
-                                protocol=protocol,
-                                type=candidate_type,
-                                sdpMid=candidate["sdpMid"],
-                                sdpMLineIndex=candidate["sdpMLineIndex"],
-                            )
-                            await pc.addIceCandidate(ice_candidate)
-                            print("Done")
-                        except Exception as e:
-                            print("Lỗi khi thêm ICE Candidate:", e)
-
+                ice = RTCIceCandidate(
+                    foundation=parts[0].split(":")[1],
+                    component=int(parts[1]),
+                    protocol=parts[2],
+                    priority=int(parts[3]),
+                    ip=parts[4],
+                    port=int(parts[5]),
+                    type=parts[7],
+                    sdpMid=candidate["sdpMid"],
+                    sdpMLineIndex=candidate["sdpMLineIndex"],
+                )
+                await pc.addIceCandidate(ice)
     except Exception as e:
-        print(f"⚠️ Lỗi WebRTC: {e}")
+        print(f"⚠️ Lỗi WebRTC Bluetooth: {e}")
     finally:
         await pc.close()
-        client_sock.close()
+        signaling.close()
 
-
-async def main():
-    # Setup Bluetooth server và nhận kết nối từ mobile app
-    client_sock = setup_bluetooth()
-
-    # Khởi tạo camera manager (giả sử bạn đã cài đặt camera_manager)
-    camera_manager = CameraManager()
-
-    # Xử lý WebRTC
-    await handleWebRTC(client_sock, camera_manager)
 
 if __name__ == "__main__":
-    import asyncio
-    asyncio.run(main())
+    camera = CameraManager()
+    asyncio.run(handle_webrtc_via_bluetooth(camera_manager=camera))

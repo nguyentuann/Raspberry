@@ -7,7 +7,9 @@ import json
 from iot.get_keypoints import getImportantKeypoints, getKeyPoint
 from queue import Queue
 
-video_path = "/home/nhattuan/Desktop/PBL5/data/Video_demo.mp4"
+video_path_1 = "/home/nhattuan/Desktop/Raspberry/data/Thanh_demo.mp4"
+video_path_2 = "/home/nhattuan/Desktop/Raspberry/data/Tuan_demo.mp4"
+sleep_time = 1 / 18
 
 
 class CameraManager(VideoStreamTrack):
@@ -22,7 +24,7 @@ class CameraManager(VideoStreamTrack):
 
     def start_camera(self):
         if not self.running:
-            self.cap = cv2.VideoCapture(video_path)
+            self.cap = cv2.VideoCapture(video_path_1)
             self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
             self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
             self.running = True
@@ -79,7 +81,7 @@ class CameraManager(VideoStreamTrack):
             try:
                 img = self.get_latest_frame()
                 if img is None:
-                    await asyncio.sleep(0.1)
+                    await asyncio.sleep(sleep_time)
                     continue
                 loop = asyncio.get_running_loop()
                 lastest_landmarks = await loop.run_in_executor(None, getKeyPoint, img)
@@ -87,7 +89,7 @@ class CameraManager(VideoStreamTrack):
                     None, getImportantKeypoints, lastest_landmarks
                 )
                 await ai_socket.send(json.dumps({"keypoints": important_keypoints}))
-                await asyncio.sleep(1 / 18)  # Giới hạn tốc độ xử lý
+                # await asyncio.sleep(sleep_time)  # Giới hạn tốc độ xử lý
             except Exception as e:
                 print(f"⚠️ Lỗi trong _send_keypoints: {e}")
-                await asyncio.sleep(0.1)
+                await asyncio.sleep(sleep_time)
