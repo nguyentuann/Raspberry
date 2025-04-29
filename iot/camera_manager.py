@@ -24,7 +24,7 @@ class CameraManager(VideoStreamTrack):
 
     def start_camera(self):
         if not self.running:
-            self.cap = cv2.VideoCapture(video_path_1)
+            self.cap = cv2.VideoCapture(0)
             self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
             self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
             self.running = True
@@ -32,16 +32,16 @@ class CameraManager(VideoStreamTrack):
             self.thread.start()
             print("Camera started")
 
-    def stop_camera(self):
-        self.connections -= 1
-        print(f"Số kết nối còn lại: {self.connections}")
-        if self.connections <= 0:
-            self.running = False
-            print("dừng camera")
-            if self.cap:
-                self.cap.release()
-                self.cap = None
-            print("Camera stopped")
+    # def stop_camera(self):
+    #     self.connections -= 1
+    #     print(f"Số kết nối còn lại: {self.connections}")
+    #     if self.connections <= 0:
+    #         self.running = False
+    #         print("dừng camera")
+    #         if self.cap:
+    #             self.cap.release()
+    #             self.cap = None
+    #         print("Camera stopped")
 
     def _capture_frames(self):
         while self.running:
@@ -81,7 +81,7 @@ class CameraManager(VideoStreamTrack):
             try:
                 img = self.get_latest_frame()
                 if img is None:
-                    await asyncio.sleep(sleep_time)
+                    # await asyncio.sleep(sleep_time)
                     continue
                 loop = asyncio.get_running_loop()
                 lastest_landmarks = await loop.run_in_executor(None, getKeyPoint, img)
@@ -89,7 +89,6 @@ class CameraManager(VideoStreamTrack):
                     None, getImportantKeypoints, lastest_landmarks
                 )
                 await ai_socket.send(json.dumps({"keypoints": important_keypoints}))
-                # await asyncio.sleep(sleep_time)  # Giới hạn tốc độ xử lý
             except Exception as e:
                 print(f"⚠️ Lỗi trong _send_keypoints: {e}")
                 await asyncio.sleep(sleep_time)
