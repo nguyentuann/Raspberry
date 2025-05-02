@@ -7,3 +7,4 @@ aiortc
 gtts
 pygame
 stomp.py
+bluezero
