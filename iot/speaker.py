@@ -23,22 +23,21 @@ async def speaker_output(dataChannel: RTCDataChannel, ai_socket):
                 print("da gui den dataChannel")
 
                 # # Phát ra loa
-                # tts = gtts.gTTS(response["content"], lang="vi")
+                tts = gtts.gTTS(response["content"], lang="vi")
 
-                # # Lưu vào file tạm vì pygame không hỗ trợ phát từ BytesIO
-                # audio = io.BytesIO()
-                # tts.write_to_fp(audio)
-                # audio.seek(0)
+                # Lưu vào file tạm vì pygame không hỗ trợ phát từ BytesIO
+                audio = io.BytesIO()
+                tts.write_to_fp(audio)
+                audio.seek(0)
 
-                # # Khởi tạo pygame để phát âm thanh
-                # pygame.mixer.init()
-                # pygame.mixer.music.load(audio, "mp3")
-                # pygame.mixer.music.play()
+                # Khởi tạo pygame để phát âm thanh
+                pygame.mixer.init()
+                pygame.mixer.music.load(audio, "mp3")
+                pygame.mixer.music.play()
 
-                # # Đợi phát xong
-                # # while pygame.mixer.music.get_busy():
-                # #     await asyncio.sleep(0.1)
+                # Đợi phát xong
+                while pygame.mixer.music.get_busy():
+                    await asyncio.sleep(0.1)
 
         except Exception as e:
             print(f"⚠️ Lỗi trong speaker_output: {e}")
-            # await asyncio.sleep(1)  # Nếu lỗi, chờ 1 giây rồi thử lại

@@ -120,7 +120,7 @@ from iot.camera_manager import CameraManager
         
 #     return dataChannel
         
-async def receive_signaling(client_socket, pc):
+async def receive_signaling(client_socket: WebSocket, pc: RTCPeerConnection):
     
     """Xử lý signaling từ WebSocket client để thiết lập WebRTC"""
     while True:
