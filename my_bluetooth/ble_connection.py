@@ -46,7 +46,7 @@ class BLEPeripheral:
                 notifying=False,  # Tắt notifying để đơn giản hóa
                 flags=["read", "write"],
                 read_callback=self.on_read,
-                write_callback=self.on_write,
+                # write_callback=self.on_write,
             )
             print("✅ Characteristic đã được thêm thành công.")
         except Exception as e:

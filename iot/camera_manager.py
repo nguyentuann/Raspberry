@@ -4,8 +4,11 @@ import threading
 from aiortc import VideoStreamTrack
 from aiortc.mediastreams import VideoFrame
 import json
-from iot.get_keypoints import getImportantKeypoints, getKeyPoint
 from queue import Queue
+
+
+from iot.get_keypoints import getImportantKeypoints, getKeyPoint
+from backend.websocket_backend import WebSocketBackend
 
 video_path_1 = "/home/nhattuan/Desktop/Raspberry/data/Thanh_demo.mp4"
 video_path_2 = "/home/nhattuan/Desktop/Raspberry/data/Tuan_demo.mp4"
@@ -24,7 +27,7 @@ class CameraManager(VideoStreamTrack):
 
     def start_camera(self):
         if not self.running:
-            self.cap = cv2.VideoCapture(0)
+            self.cap = cv2.VideoCapture(video_path_1)
             self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
             self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
             self.running = True
@@ -76,7 +79,10 @@ class CameraManager(VideoStreamTrack):
             return None
 
     # hàm gửi keypoints
-    async def _send_keypoints(self, ai_socket):
+    async def _send_keypoints(self, backend_server):
+        if backend_server is None:
+            print("Không thể gửi keypoints vì không có kết nối đến backend server.")
+            return
         while self.running:
             try:
                 img = self.get_latest_frame()
@@ -88,7 +94,15 @@ class CameraManager(VideoStreamTrack):
                 important_keypoints = await loop.run_in_executor(
                     None, getImportantKeypoints, lastest_landmarks
                 )
-                await ai_socket.send(json.dumps({"keypoints": important_keypoints}))
+                if (important_keypoints is not None): 
+                    await backend_server.send(
+                        json.dumps(
+                            {
+                                "user_id": "111",
+                                "key_points": important_keypoints,
+                            }
+                        )
+                    )
             except Exception as e:
                 print(f"⚠️ Lỗi trong _send_keypoints: {e}")
                 await asyncio.sleep(sleep_time)
