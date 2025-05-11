@@ -5,30 +5,27 @@ import gtts
 import json
 from aiortc import RTCDataChannel
 
-from backend.websocket_backend import WebSocketBackend
 
 
 # phát thông báo ra loa
 async def speaker_output(
-    # dataChannel: RTCDataChannel,
-    backend_server,
+    dataChannel: RTCDataChannel,
+    backend_server_future: asyncio.Future,
 ):
     pygame.mixer.init()
-    if backend_server is None:
-        print("❌ Không thể phát âm thanh vì không có kết nối đến backend server.")
-        return
+    backend_server = await backend_server_future
 
     while True:
         try:
-            response = await backend_server.recv() 
+            response = await backend_server.recv()
             if response is None:
                 print("❌ Không có phản hồi từ backend server.")
                 await asyncio.sleep(1)
-                continue 
+                continue
             # Đợi tin nhắn từ AI server
             # response = json.loads(response)
 
-            print(f"📥 Nhận phản hồi từ AI: {response}")
+            print(f"📥 Nhận phản hồi từ backend: {response}")
 
             # if response["content"] != "Unknow":
             #     print(dataChannel.readyState)

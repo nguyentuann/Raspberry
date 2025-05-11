@@ -1,152 +1,50 @@
+import asyncio
 from aiortc import (
     RTCConfiguration,
+    RTCDataChannel,
     RTCIceCandidate,
     RTCIceServer,
     RTCPeerConnection,
     RTCSessionDescription,
 )
 from fastapi import WebSocket
-from iot.camera_manager import CameraManager  
+from iot.camera_manager import CameraManager
 
-# async def handleWebRTC(client_socket: WebSocket, camera_manager: CameraManager):
 
-#     """Xử lý WebRTC"""
-#     configuration = RTCConfiguration(
-#         iceServers=[RTCIceServer(urls="stun:stun.l.google.com:19302")]
-#     )
-#     pc = RTCPeerConnection(configuration)
-#     # pc.addTrack(camera_manager)
-    
-    
-#     # Xử lý datachannel
-#     dataChannel = pc.createDataChannel("sendError")
-    
-#     @dataChannel.on("open")
-#     def openDataChannel():
-#         dataChannel.send("Hello World")
-    
-#     @dataChannel.on("message")
-#     def sendMessage(messsage):
-#         dataChannel.send(messsage)
-        
-#     # ----------------------------- #
 
-#     # Kết nối WebRTC
-#     @pc.on("icecandidate")
-#     async def on_ice_candidate(candidate):
-#         if candidate:
-#             print("📡 Gửi ICE Candidate đến client")
-#             await client_socket.send_json(
-#                 {
-#                     "type": "candidate",
-#                     "candidate": {
-#                         "candidate": candidate.to_sdp(),
-#                         "sdpMid": candidate.sdpMid,
-#                         "sdpMLineIndex": candidate.sdpMLineIndex,
-#                     },
-#                 }
-#             )
-#     try:
-#         while True:
-#             data = await client_socket.receive_json()
 
-#             if data["type"] == "join":
-#                 offer = await pc.createOffer()
-#                 await pc.setLocalDescription(offer)
-#                 await client_socket.send_json(
-#                     {
-#                         "type": "offer",
-#                         "offer": {
-#                             "sdp": pc.localDescription.sdp,
-#                             "type": pc.localDescription.type,
-#                         },
-#                     }
-#                 )
-#                 print("✅ Đã gửi Offer")
+async def receive_signaling(
+    client_socket: WebSocket, pc: RTCPeerConnection, camera_manager: CameraManager
+):
+    pc.addTrack(camera_manager)
 
-#             elif data["type"] == "answer":
-#                 print("✅ Nhận Answer từ client")
-#                 remoteDesc = RTCSessionDescription(
-#                     sdp=data["answer"]["sdp"], type=data["answer"]["type"]
-#                 )
-#                 await pc.setRemoteDescription(remoteDesc)
-
-#             elif data["type"] == "candidate":
-#                 print('nhận candidate')
-#                 candidate = data["candidate"]
-#                 parts = candidate["candidate"].split()
-
-#                 foundation = parts[0].split(":")[1]
-#                 component = int(parts[1])
-#                 protocol = parts[2]
-#                 priority = int(parts[3])
-#                 ip = parts[4]
-#                 port = int(parts[5])
-#                 candidate_type = parts[7]
-
-#                 # Kiểm tra candidate có đủ thông tin cần thiết
-#                 if (
-#                     "sdpMid" in candidate
-#                     and candidate["sdpMid"] is not None
-#                     and "sdpMLineIndex" in candidate
-#                     and "candidate" in candidate
-#                 ):
-#                     # Chỉ thêm candidate nếu đã có remoteDescription
-#                     if pc.remoteDescription is None:
-#                         print("Chưa có remoteDescription, bỏ qua ICE Candidate")
-#                     else:
-#                         try:
-
-#                             ice_candidate = RTCIceCandidate(
-#                                 component=component,
-#                                 foundation=foundation,
-#                                 ip=ip,
-#                                 port=port,
-#                                 priority=priority,
-#                                 protocol=protocol,
-#                                 type=candidate_type,
-#                                 sdpMid=candidate["sdpMid"],
-#                                 sdpMLineIndex=candidate["sdpMLineIndex"],
-#                             )
-#                             await pc.addIceCandidate(ice_candidate)
-#                             print("Done")
-#                         except Exception as e:
-#                             print("Lỗi khi thêm ICE Candidate:", e)
-
-#     except Exception as e:
-#         print(f"⚠️ Lỗi WebRTC: {e}")
-#     finally:
-#         await pc.close()
-        
-#     return dataChannel
-        
-async def receive_signaling(client_socket: WebSocket, pc: RTCPeerConnection):
-    
     """Xử lý signaling từ WebSocket client để thiết lập WebRTC"""
     while True:
         data = await client_socket.receive_json()
 
-        if data["type"] == "join":
-            offer = await pc.createOffer()
-            await pc.setLocalDescription(offer)
-            await client_socket.send_json({
-                "type": "offer",
-                "offer": {
-                    "sdp": pc.localDescription.sdp,
-                    "type": pc.localDescription.type,
-                },
-            })
-            print("✅ Đã gửi offer tới client")
-
-        elif data["type"] == "answer":
+        if data["type"] == "offer":
+            # Nhận offer từ client và thiết lập remote description
             remoteDesc = RTCSessionDescription(
-                sdp=data["answer"]["sdp"], type=data["answer"]["type"]
+                sdp=data["data"]["sdp"], type=data["data"]["type"]
             )
-            await pc.setRemoteDescription(remoteDesc)
-            print("✅ Nhận answer và thiết lập remote description")
 
-        elif data["type"] == "candidate":
-            candidate = data["candidate"]
+            await pc.setRemoteDescription(remoteDesc)
+
+            # Tạo answer và gửi lại cho client
+            answer = await pc.createAnswer()
+            await pc.setLocalDescription(answer)
+            await client_socket.send_json(
+                {
+                    "type": "answer",
+                    "data": {
+                        "sdp": pc.localDescription.sdp,
+                        "type": pc.localDescription.type,
+                    },
+                }
+            )
+
+        elif data["type"] == "icecandidate":
+            candidate = data["data"]
             parts = candidate["candidate"].split()
             try:
                 ice_candidate = RTCIceCandidate(
@@ -161,34 +59,40 @@ async def receive_signaling(client_socket: WebSocket, pc: RTCPeerConnection):
                     sdpMLineIndex=candidate["sdpMLineIndex"],
                 )
                 await pc.addIceCandidate(ice_candidate)
-                print("✅ Đã thêm ICE Candidate")
             except Exception as e:
-                print("⚠️ Lỗi khi thêm ICE Candidate:", e)
+                print(f"⚠️ Lỗi khi thêm ICE Candidate: {e}")
 
 
-
-async def handleWebRTC(client_socket: WebSocket, camera_manager: CameraManager):
+async def handleWebRTC(client_socket: WebSocket):
+    # Cấu hình RTC với STUN server
     configuration = RTCConfiguration(
         iceServers=[RTCIceServer(urls="stun:stun.l.google.com:19302")]
     )
     pc = RTCPeerConnection(configuration)
-    pc.addTrack(camera_manager)
+    
+    data_channel_ready = asyncio.get_event_loop().create_future()
 
-    # thiết lập dataChannel
-    dataChannel = pc.createDataChannel("sendError")
-
+    @pc.on("datachannel")
+    def on_datachannel(channel):
+        data_channel_ready.set_result(channel)
     # Gửi ICE candidate về client
-    @pc.on("icecandidate")
-    async def on_ice_candidate(candidate):
-        if candidate:
-            await client_socket.send_json({
-                "type": "candidate",
-                "candidate": {
-                    "candidate": candidate.to_sdp(),
-                    "sdpMid": candidate.sdpMid,
-                    "sdpMLineIndex": candidate.sdpMLineIndex,
-                },
-            })
+    @pc.on("candidate")
+    async def on_ice_candidate(event):
+        if event.candidate:
+            try:
+                # Gửi ICE candidate về client qua WebSocket
+                await client_socket.send_json(
+                    {
+                        "type": "icecandidate",
+                        "data": {
+                            "candidate": event.candidate.to_sdp(),
+                            "sdpMid": event.candidate.sdpMid,
+                            "sdpMLineIndex": event.candidate.sdpMLineIndex,
+                        },
+                    }
+                )
+            except Exception as e:
+                print(f"⚠️ Lỗi khi gửi ICE candidate: {e}")
 
-    # ✅ Trả về pc và dataChannel ngay sau khi thiết lập xong
-    return pc, dataChannel
+    # Trả về pc và dataChannel sau khi thiết lập xong
+    return pc, data_channel_ready

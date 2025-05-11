@@ -20,7 +20,6 @@ class BLEPeripheral:
     def __init__(self):
         self.service_uuid = "12345678-1234-5678-1234-56789abcdeff"
         self.char_uuid = "12345678-1234-5678-1234-56789abcdef0"
-        self.last_message = ""  # Biến lưu tin nhắn nhận được từ Flutter
 
         adapters = list(adapter.Adapter.available())
         if not adapters:
@@ -59,21 +58,9 @@ class BLEPeripheral:
         response = get_real_local_ip()
         return [ord(c) for c in response]
 
-    # def on_write(self, value, options):
-    #     try:
-    #         message = bytes(value).decode("utf-8")
-    #         if (
-    #             len(message) > 16
-    #         ):  # Giới hạn tin nhắn để tổng "OK: " + tin nhắn < 20 byte
-    #             print(f"⚠️ [{time.time()}] Tin nhắn quá dài: {message}")
-    #             return
-    #         self.last_message = message  # Lưu tin nhắn nhận được
-    #         print(f"📥 [{time.time()}] Tin nhắn nhận được từ client: {message}")
-    #     except Exception as e:
-    #         print(f"⚠️ [{time.time()}] Lỗi khi xử lý tin nhắn: {e}")
-
     def start(self):
         print("📡 Đang quảng bá BLE, chờ kết nối từ client...")
+        self.ble.local_name = "RaspberryPi"
         self.ble.publish()
 
     def stop(self):
