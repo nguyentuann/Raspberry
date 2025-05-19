@@ -1,9 +1,12 @@
-import base64
 from bluezero import peripheral
 from bluezero import adapter
 import time
+import subprocess
+import os
 
 import socket
+
+from dbus import SystemBus
 
 
 def get_real_local_ip():
@@ -14,6 +17,34 @@ def get_real_local_ip():
     finally:
         s.close()
     return ip
+
+# ! TẮT BLUETOOTH
+def turn_off_bluetooth():
+    try:
+        print("⛔ Đang tắt thiết bị Bluetooth...")
+        subprocess.run(["sudo", "hciconfig", "hci0", "down"], check=True)
+        subprocess.run(["sudo", "rfkill", "block", "bluetooth"], check=True)
+        print("🛑 Bluetooth đã được tắt hoàn toàn.")
+    except subprocess.CalledProcessError as e:
+        print(f"⚠️ Lỗi khi tắt Bluetooth: {e}")
+    except Exception as e:
+        print(f"⚠️ Lỗi không xác định khi tắt Bluetooth: {e}")
+
+# ! BẬT BLUETOOTH      
+def power_on_bluetooth_adapter_shell():
+    try:
+        print("🔓 Mở khóa Bluetooth nếu đang bị block...")
+        subprocess.run(["sudo", "rfkill", "unblock", "bluetooth"], check=True)
+
+        print("⚙️ Bật thiết bị Bluetooth adapter...")
+        subprocess.run(["sudo", "hciconfig", "hci0", "up"], check=True)
+
+        print("✅ Bluetooth adapter đã được bật.")
+    except subprocess.CalledProcessError as e:
+        print(f"❌ Không thể bật Bluetooth: {e}")
+    except Exception as e:
+        print(f"⚠️ Lỗi không xác định khi bật Bluetooth: {e}")
+
 
 
 class BLEPeripheral:
@@ -60,24 +91,12 @@ class BLEPeripheral:
 
     def start(self):
         print("📡 Đang quảng bá BLE, chờ kết nối từ client...")
-        self.ble.local_name = "RaspberryPi"
+        self.ble.local_name = "GymBot"
+        self.name = "GymBot"
         self.ble.publish()
 
     def stop(self):
+        turn_off_bluetooth()
         print("🛑 Dừng quảng bá BLE.")
 
 
-if __name__ == "__main__":
-    ble_peripheral = None
-    try:
-        ble_peripheral = BLEPeripheral()
-        ble_peripheral.start()
-        while True:
-            time.sleep(1)
-    except KeyboardInterrupt:
-        print("\n🧹 Ngắt kết nối BLE và thoát...")
-    except Exception as e:
-        print(f"⚠️ Lỗi: {e}")
-    finally:
-        if ble_peripheral:
-            ble_peripheral.stop()
