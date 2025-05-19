@@ -48,6 +48,8 @@ class CameraManager(VideoStreamTrack):
         if self.connections <= 0:
             self.running = False
             print("dừng camera")
+            if self.thread:
+                self.thread.join()
             if self.cap:
                 self.cap.release()
                 self.cap = None

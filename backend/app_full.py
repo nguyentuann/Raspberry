@@ -112,7 +112,7 @@ async def websocket_endpoint(client_socket: WebSocket):
                 await pc.close()
 
             # đóng kết nối backend_server
-            if backend_server_future.done():
+            if backend_server_future.done() and not backend_server_future.cancelled():
                 try:
                     backend_server = backend_server_future.result()
                     await backend_server.close()
@@ -133,7 +133,7 @@ async def websocket_endpoint(client_socket: WebSocket):
         else:
             print("Camera manager không tồn tại.")
 
-        if backend_server_future.done():
+        if backend_server_future.done() and not backend_server_future.cancelled():
             try:
                 backend_server = backend_server_future.result()
                 await backend_server.close()
